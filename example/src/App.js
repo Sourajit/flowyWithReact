@@ -1,6 +1,6 @@
 import React  from 'react'
 
-import {ReactFlowy,deleteBlocks} from 'react-flowy'
+import {ReactFlowy, deleteBlocks } from 'react-flowy'
 import 'react-flowy/dist/index.css'
 
 const App = () => {
@@ -21,7 +21,7 @@ const App = () => {
                 <div id="rightswitch">Code editor</div>
             </div>
             <div id="buttonsright">
-                <div id="removeblock" onClick={deleteBlocks}>Delete blocks</div>
+                { <div id="removeblock" onClick={deleteBlocks}>Delete blocks</div> }
             </div>
         </div>
         <div id="leftcard">

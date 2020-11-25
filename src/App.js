@@ -1,29 +1,41 @@
-import React,  { useEffect } from "react";
+import React, { useEffect } from 'react'
+import { createStore, applyMiddleware } from 'redux'
+import createSagaMiddleware from 'redux-saga'
+import { Provider } from 'react-redux'
+import reducer from './reducers'
+import rootSaga from './sagas'
+
+const sagaMiddleware = createSagaMiddleware()
+const store = createStore(reducer, applyMiddleware(sagaMiddleware))
+sagaMiddleware.run(rootSaga)
+
+const action = (type,payload,key) => store.dispatch({ type , payload,key})
+
+console.log("Initial State",store.getState());
 
 var blocks = [];
 var blockstemp = [];
 var canvas_div;
-var absx = 0;
-var absy = 0;
-var active = false;
-var offsetleft = 0;
-var drag, dragx, dragy, original;
-var dragblock = false;
-var prevblock = 0;
+var drag, original;
 var el = document.createElement("DIV");
-var loaded = false;
+
+store.subscribe(()=>{
+  console.log("Updated State",store.getState());
+})
+
 //props
 var grab;
 var release;
 var snapping;
-var rearrange;
+var rearrange = function() {
+  return false;
+};
 var paddingx;
 var paddingy;
 
-export const load = ({props}) => {
-    //{...props} = {params}
-    if (!loaded)
-        loaded = true;
+export const load = (props) => {
+    if (!store.getState().loaded)
+      action("UPDATE",true,"loaded");
     else
         return;
     canvas_div = (props.id)?document.getElementById(props.id):document.getElementById("canvas");
@@ -33,9 +45,9 @@ export const load = ({props}) => {
     paddingx = props.spacing_x || 20;
     paddingy = props.spacing_y || 80;
     rearrange = props.rearrange || false;
-    if (window.getComputedStyle(canvas_div).position == "absolute" || window.getComputedStyle(canvas_div).position == "fixed") {
-        absx = canvas_div.getBoundingClientRect().left;
-        absy = canvas_div.getBoundingClientRect().top;
+    if (window.getComputedStyle(canvas_div).position == "absolute" || window.getComputedStyle(canvas_div).position == "fixed") {    
+      action("UPDATE",canvas_div.getBoundingClientRect().left,"absx");
+      action("UPDATE",canvas_div.getBoundingClientRect().top,"absy")
     }
     el.classList.add('indicator');
     el.classList.add('invisible');
@@ -98,9 +110,9 @@ export const _import = function(output) {
   }
   export const beginDrag = function(event) {
     var mouse_x, mouse_y;
-    if (window.getComputedStyle(canvas_div).position == "absolute" || window.getComputedStyle(canvas_div).position == "fixed") {
-        absx = canvas_div.getBoundingClientRect().left;
-        absy = canvas_div.getBoundingClientRect().top;
+    if (window.getComputedStyle(canvas_div).position == "absolute" || window.getComputedStyle(canvas_div).position == "fixed") {      
+        action("UPDATE",canvas_div.getBoundingClientRect().left,"absx");
+        action("UPDATE",canvas_div.getBoundingClientRect().top,"absy");
     }
     if (event.targetTouches) {
         mouse_x = event.changedTouches[0].clientX;
@@ -126,44 +138,44 @@ export const _import = function(output) {
         }
         blockGrabbed(event.target.closest(".create-flowy"));
         drag.classList.add("dragging");
-        active = true;
-        dragx = mouse_x - (event.target.closest(".create-flowy").getBoundingClientRect().left);
-        dragy = mouse_y - (event.target.closest(".create-flowy").getBoundingClientRect().top);
-        drag.style.left = mouse_x - dragx + "px";
-        drag.style.top = mouse_y - dragy + "px";
+        action("UPDATE",true,"active");
+        action("UPDATE",mouse_x -  (event.target.closest(".create-flowy").getBoundingClientRect().left),"dragx");
+        action("UPDATE",mouse_y -  (event.target.closest(".create-flowy").getBoundingClientRect().top),"dragy");
+        drag.style.left = mouse_x - store.getState().dragx + "px";
+        drag.style.top = mouse_y - store.getState().dragy + "px";
     }
   }
   export const endDrag = function(event) {
-    if (event.which != 3 && (active || rearrange)) {
-        dragblock = false;
+    if (event.which != 3 && (store.getState().active || rearrange)) {
+        action("UPDATE",false,"dragblock");
         blockReleased();
         if (!document.querySelector(".indicator").classList.contains("invisible")) {
             document.querySelector(".indicator").classList.add("invisible");
         }
-        if (active) {
+        if (store.getState().active) {
             original.classList.remove("dragnow");
             drag.classList.remove("dragging");
         }
         if (parseInt(drag.querySelector(".blockid").value) === 0 && rearrange) {
             firstBlock("rearrange")    
-        } else if (active && blocks.length == 0 && (drag.getBoundingClientRect().top + window.scrollY) > (canvas_div.getBoundingClientRect().top + window.scrollY) && (drag.getBoundingClientRect().left + window.scrollX) > (canvas_div.getBoundingClientRect().left + window.scrollX)) {
+        } else if (store.getState().active && blocks.length == 0 && (drag.getBoundingClientRect().top + window.scrollY) > (canvas_div.getBoundingClientRect().top + window.scrollY) && (drag.getBoundingClientRect().left + window.scrollX) > (canvas_div.getBoundingClientRect().left + window.scrollX)) {
             firstBlock("drop");
-        } else if (active && blocks.length == 0) {
+        } else if (store.getState().active && blocks.length == 0) {
             removeSelection();
-        } else if (active) {
+        } else if (store.getState().active) {
             var blocko = blocks.map(a => a.id);
             for (var i = 0; i < blocks.length; i++) {
                 if (checkAttach(blocko[i])) {
-                    active = false;
+                    action("UPDATE",false,"active");
                     if (blockSnap(drag, false, document.querySelector(".blockid[value='" + blocko[i] + "']").parentNode)) {
                         snap(drag, i, blocko);
                     } else {
-                        active = false;
+                        action("UPDATE",false,"active");
                         removeSelection();
                     }
                     break;
                 } else if (i == blocks.length - 1) {
-                    active = false;
+                    action("UPDATE",false,"active");
                     removeSelection();
                 }
             }
@@ -171,20 +183,20 @@ export const _import = function(output) {
             var blocko = blocks.map(a => a.id);
             for (var i = 0; i < blocks.length; i++) {
                 if (checkAttach(blocko[i])) {
-                    active = false;
+                    action("UPDATE",false,"active");
                     drag.classList.remove("dragging");
                     snap(drag, i, blocko);
                     break;
                 } else if (i == blocks.length - 1) {
                     if (beforeDelete(drag, blocks.filter(id => id.id == blocko[i])[0])) {
-                        active = false;
+                        action("UPDATE",false,"active");
                         drag.classList.remove("dragging");
-                        snap(drag, blocko.indexOf(prevblock), blocko);
+                        snap(drag, blocko.indexOf(store.getState().prevblock), blocko);
                         break;
                     } else {
                         rearrange = false;
                         blockstemp = [];
-                        active = false;
+                        action("UPDATE",false,"active");
                         removeSelection();
                         break;
                     }
@@ -212,9 +224,9 @@ export const _import = function(output) {
   function firstBlock(type) {
     if (type == "drop") {
         blockSnap(drag, true, undefined);
-        active = false;
-        drag.style.top = (drag.getBoundingClientRect().top + window.scrollY) - (absy + window.scrollY) + canvas_div.scrollTop + "px";
-        drag.style.left = (drag.getBoundingClientRect().left + window.scrollX) - (absx + window.scrollX) + canvas_div.scrollLeft + "px";
+        action("UPDATE",false,"active");
+        drag.style.top = (drag.getBoundingClientRect().top + window.scrollY) - (store.getState().absy + window.scrollY) + canvas_div.scrollTop + "px";
+        drag.style.left = (drag.getBoundingClientRect().left + window.scrollX) - (store.getState().absx + window.scrollX) + canvas_div.scrollLeft + "px";
         canvas_div.appendChild(drag);
         blocks.push({
             parent: -1,
@@ -232,10 +244,10 @@ export const _import = function(output) {
             if (blockstemp[w].id != parseInt(drag.querySelector(".blockid").value)) {
                 const blockParent = document.querySelector(".blockid[value='" + blockstemp[w].id + "']").parentNode;
                 const arrowParent = document.querySelector(".arrowid[value='" + blockstemp[w].id + "']").parentNode;
-                blockParent.style.left = (blockParent.getBoundingClientRect().left + window.scrollX) - (window.scrollX) + canvas_div.scrollLeft - 1 - absx + "px";
-                blockParent.style.top = (blockParent.getBoundingClientRect().top + window.scrollY) - (window.scrollY) + canvas_div.scrollTop - absy - 1 + "px";
-                arrowParent.style.left = (arrowParent.getBoundingClientRect().left + window.scrollX) - (window.scrollX) + canvas_div.scrollLeft - absx - 1 + "px";
-                arrowParent.style.top = (arrowParent.getBoundingClientRect().top + window.scrollY) + canvas_div.scrollTop - 1 - absy + "px";
+                blockParent.style.left = (blockParent.getBoundingClientRect().left + window.scrollX) - (window.scrollX) + canvas_div.scrollLeft - 1 - store.getState().absx + "px";
+                blockParent.style.top = (blockParent.getBoundingClientRect().top + window.scrollY) - (window.scrollY) + canvas_div.scrollTop - store.getState().absy - 1 + "px";
+                arrowParent.style.left = (arrowParent.getBoundingClientRect().left + window.scrollX) - (window.scrollX) + canvas_div.scrollLeft - store.getState().absx - 1 + "px";
+                arrowParent.style.top = (arrowParent.getBoundingClientRect().top + window.scrollY) + canvas_div.scrollTop - 1 - store.getState().absy + "px";
                 canvas_div.appendChild(blockParent);
                 canvas_div.appendChild(arrowParent);
                 blockstemp[w].x = (blockParent.getBoundingClientRect().left + window.scrollX) + (parseInt(blockParent.offsetWidth) / 2) + canvas_div.scrollLeft - canvas_div.getBoundingClientRect().left - 1;
@@ -252,20 +264,20 @@ export const _import = function(output) {
   function drawArrow(arrow, x, y, id) {
     if (x < 0) {
         canvas_div.innerHTML += '<div class="arrowblock"><input type="hidden" class="arrowid" value="' + drag.querySelector(".blockid").value + '"><svg preserveaspectratio="none" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M' + (blocks.filter(a => a.id == id)[0].x - arrow.x + 5) + ' 0L' + (blocks.filter(a => a.id == id)[0].x - arrow.x + 5) + ' ' + (paddingy / 2) + 'L5 ' + (paddingy / 2) + 'L5 ' + y + '" stroke="#C5CCD0" stroke-width="2px"/><path d="M0 ' + (y - 5) + 'H10L5 ' + y + 'L0 ' + (y - 5) + 'Z" fill="#C5CCD0"/></svg></div>';
-        document.querySelector('.arrowid[value="' + drag.querySelector(".blockid").value + '"]').parentNode.style.left = (arrow.x - 5) - (absx + window.scrollX) + canvas_div.scrollLeft + canvas_div.getBoundingClientRect().left + "px";
+        document.querySelector('.arrowid[value="' + drag.querySelector(".blockid").value + '"]').parentNode.style.left = (arrow.x - 5) - (store.getState().absx + window.scrollX) + canvas_div.scrollLeft + canvas_div.getBoundingClientRect().left + "px";
     } else {
         canvas_div.innerHTML += '<div class="arrowblock"><input type="hidden" class="arrowid" value="' + drag.querySelector(".blockid").value + '"><svg preserveaspectratio="none" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M20 0L20 ' + (paddingy / 2) + 'L' + (x) + ' ' + (paddingy / 2) + 'L' + x + ' ' + y + '" stroke="#C5CCD0" stroke-width="2px"/><path d="M' + (x - 5) + ' ' + (y - 5) + 'H' + (x + 5) + 'L' + x + ' ' + y + 'L' + (x - 5) + ' ' + (y - 5) + 'Z" fill="#C5CCD0"/></svg></div>';
-        document.querySelector('.arrowid[value="' + parseInt(drag.querySelector(".blockid").value) + '"]').parentNode.style.left = blocks.filter(a => a.id == id)[0].x - 20 - (absx + window.scrollX) + canvas_div.scrollLeft + canvas_div.getBoundingClientRect().left + "px";
+        document.querySelector('.arrowid[value="' + parseInt(drag.querySelector(".blockid").value) + '"]').parentNode.style.left = blocks.filter(a => a.id == id)[0].x - 20 - (store.getState().absx  + window.scrollX) + canvas_div.scrollLeft + canvas_div.getBoundingClientRect().left + "px";
     }
-    document.querySelector('.arrowid[value="' + parseInt(drag.querySelector(".blockid").value) + '"]').parentNode.style.top = blocks.filter(a => a.id == id)[0].y + (blocks.filter(a => a.id == id)[0].height / 2) + canvas_div.getBoundingClientRect().top - absy + "px";
+    document.querySelector('.arrowid[value="' + parseInt(drag.querySelector(".blockid").value) + '"]').parentNode.style.top = blocks.filter(a => a.id == id)[0].y + (blocks.filter(a => a.id == id)[0].height / 2) + canvas_div.getBoundingClientRect().top - store.getState().absy + "px";
   }
 
   function updateArrow(arrow, x, y, children) { 
     if (x < 0) {
-        document.querySelector('.arrowid[value="' + children.id + '"]').parentNode.style.left = (arrow.x - 5) - (absx + window.scrollX) + canvas_div.getBoundingClientRect().left + "px";
+        document.querySelector('.arrowid[value="' + children.id + '"]').parentNode.style.left = (arrow.x - 5) - (store.getState().absx + window.scrollX) + canvas_div.getBoundingClientRect().left + "px";
         document.querySelector('.arrowid[value="' + children.id + '"]').parentNode.innerHTML = '<input type="hidden" class="arrowid" value="' + children.id + '"><svg preserveaspectratio="none" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M' + (blocks.filter(id => id.id == children.parent)[0].x - arrow.x + 5) + ' 0L' + (blocks.filter(id => id.id == children.parent)[0].x - arrow.x + 5) + ' ' + (paddingy / 2) + 'L5 ' + (paddingy / 2) + 'L5 ' + y + '" stroke="#C5CCD0" stroke-width="2px"/><path d="M0 ' + (y - 5) + 'H10L5 ' + y + 'L0 ' + (y - 5) + 'Z" fill="#C5CCD0"/></svg>';
     } else {
-        document.querySelector('.arrowid[value="' + children.id + '"]').parentNode.style.left = blocks.filter(id => id.id == children.parent)[0].x - 20 - (absx + window.scrollX) + canvas_div.getBoundingClientRect().left + "px";
+        document.querySelector('.arrowid[value="' + children.id + '"]').parentNode.style.left = blocks.filter(id => id.id == children.parent)[0].x - 20 - (store.getState().absx + window.scrollX) + canvas_div.getBoundingClientRect().left + "px";
         document.querySelector('.arrowid[value="' + children.id + '"]').parentNode.innerHTML = '<input type="hidden" class="arrowid" value="' + children.id + '"><svg preserveaspectratio="none" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M20 0L20 ' + (paddingy / 2) + 'L' + (x) + ' ' + (paddingy / 2) + 'L' + x + ' ' + y + '" stroke="#C5CCD0" stroke-width="2px"/><path d="M' + (x - 5) + ' ' + (y - 5) + 'H' + (x + 5) + 'L' + x + ' ' + y + 'L' + (x - 5) + ' ' + (y - 5) + 'Z" fill="#C5CCD0"/></svg>';
     }
   }
@@ -298,11 +310,11 @@ export const _import = function(output) {
             totalremove += children.width + paddingx;
         }
     }
-    drag.style.left = blocks.filter(id => id.id == blocko[i])[0].x - (totalwidth / 2) + totalremove - (window.scrollX + absx) + canvas_div.scrollLeft + canvas_div.getBoundingClientRect().left + "px";
-    drag.style.top = blocks.filter(id => id.id == blocko[i])[0].y + (blocks.filter(id => id.id == blocko[i])[0].height / 2) + paddingy - (window.scrollY + absy) + canvas_div.getBoundingClientRect().top + "px";
+    drag.style.left = blocks.filter(id => id.id == blocko[i])[0].x - (totalwidth / 2) + totalremove - (window.scrollX + store.getState().absx) + canvas_div.scrollLeft + canvas_div.getBoundingClientRect().left + "px";
+    drag.style.top = blocks.filter(id => id.id == blocko[i])[0].y + (blocks.filter(id => id.id == blocko[i])[0].height / 2) + paddingy - (window.scrollY + store.getState().absy) + canvas_div.getBoundingClientRect().top + "px";
     if (rearrange) {
         blockstemp.filter(a => a.id == parseInt(drag.querySelector(".blockid").value))[0].x = (drag.getBoundingClientRect().left + window.scrollX) + (parseInt(window.getComputedStyle(drag).width) / 2) + canvas_div.scrollLeft - canvas_div.getBoundingClientRect().left;
-        blockstemp.filter(a => a.id == parseInt(drag.querySelector(".blockid").value))[0].y = (drag.getBoundingClientRect().top + window.scrollY + absy) + (parseInt(window.getComputedStyle(drag).height) / 2) + canvas_div.scrollTop - canvas_div.getBoundingClientRect().top;
+        blockstemp.filter(a => a.id == parseInt(drag.querySelector(".blockid").value))[0].y = (drag.getBoundingClientRect().top + window.scrollY + store.getState().absy) + (parseInt(window.getComputedStyle(drag).height) / 2) + canvas_div.scrollTop - canvas_div.getBoundingClientRect().top;
         blockstemp.filter(a => a.id == drag.querySelector(".blockid").value)[0].parent = blocko[i];
         for (var w = 0; w < blockstemp.length; w++) {
             if (blockstemp[w].id != parseInt(drag.querySelector(".blockid").value)) {
@@ -377,7 +389,7 @@ export const _import = function(output) {
   }
 
   function touchblock(event) {
-    dragblock = false;
+    action("UPDATE",false,"dragblock");
     var mouse_x, mouse_y;
     if (hasParentClass(event.target, "block")) {
         var theblock = event.target.closest(".block");
@@ -390,11 +402,11 @@ export const _import = function(output) {
         }
         if (event.type !== "mouseup" && hasParentClass(event.target, "block")) {
             if (event.which != 3) {
-                if (!active && !rearrange) {
-                    dragblock = true;
+                if (!store.getState().active && !rearrange) {
+                    action("UPDATE",true,"dragblock");
                     drag = theblock;
-                    dragx = mouse_x - (drag.getBoundingClientRect().left + window.scrollX);
-                    dragy = mouse_y - (drag.getBoundingClientRect().top + window.scrollY);
+                    action("UPDATE",mouse_x - (drag.getBoundingClientRect().left + window.scrollX),"dragx");
+                    action("UPDATE",mouse_y - (drag.getBoundingClientRect().top + window.scrollY),"dragy");
                 }
             }
         }
@@ -417,11 +429,11 @@ export const _import = function(output) {
         mouse_x = event.clientX;
         mouse_y = event.clientY;
     }
-    if (dragblock) {
+    if (store.getState().dragblock) {
         rearrange = true;
         drag.classList.add("dragging");
         var blockid = parseInt(drag.querySelector(".blockid").value);
-        prevblock = blocks.filter(a => a.id == blockid)[0].parent;
+        action("UPDATE",blocks.filter(a => a.id == blockid)[0].parent,"prevblock" );
         blockstemp.push(blocks.filter(a => a.id == blockid)[0]);
         blocks = blocks.filter(function(e) {
             return e.id != blockid
@@ -471,18 +483,18 @@ export const _import = function(output) {
         if (blocks.length > 1) {
             rearrangeMe();
         }
-        dragblock = false;
+        action("UPDATE",false,"dragblock");
     }
-    if (active) {
-        drag.style.left = mouse_x - dragx + "px";
-        drag.style.top = mouse_y - dragy + "px";
+    if (store.getState().active) {
+        drag.style.left = mouse_x - store.getState().dragx + "px";
+        drag.style.top = mouse_y - store.getState().dragy + "px";
     } else if (rearrange) {
-        drag.style.left = mouse_x - dragx - (window.scrollX + absx) + canvas_div.scrollLeft + "px";
-        drag.style.top = mouse_y - dragy - (window.scrollY + absy) + canvas_div.scrollTop + "px";
+        drag.style.left = mouse_x - store.getState().dragx - (window.scrollX + store.getState().absx) + canvas_div.scrollLeft + "px";
+        drag.style.top = mouse_y - store.getState().dragy - (window.scrollY + store.getState().absy) + canvas_div.scrollTop + "px";
         blockstemp.filter(a => a.id == parseInt(drag.querySelector(".blockid").value)).x = (drag.getBoundingClientRect().left + window.scrollX) + (parseInt(window.getComputedStyle(drag).width) / 2) + canvas_div.scrollLeft;
         blockstemp.filter(a => a.id == parseInt(drag.querySelector(".blockid").value)).y = (drag.getBoundingClientRect().top + window.scrollY) + (parseInt(window.getComputedStyle(drag).height) / 2) + canvas_div.scrollTop;
     }
-    if (active || rearrange) {
+    if (store.getState().active || rearrange) {
         if (mouse_x > canvas_div.getBoundingClientRect().width + canvas_div.getBoundingClientRect().left - 10 && mouse_x < canvas_div.getBoundingClientRect().width + canvas_div.getBoundingClientRect().left + 10) {
             canvas_div.scrollLeft += 10;
         } else if (mouse_x < canvas_div.getBoundingClientRect().left + 10 && mouse_x > canvas_div.getBoundingClientRect().left - 10) {
@@ -512,23 +524,23 @@ export const _import = function(output) {
   }
 
   function checkOffset() {
-    offsetleft = blocks.map(a => a.x);
+    action("UPDATE",blocks.map(a => a.x),"offsetleft");
     var widths = blocks.map(a => a.width);
-    var mathmin = offsetleft.map(function(item, index) {
+    var mathmin = store.getState().offsetleft.map(function(item, index) {
         return item - (widths[index] / 2);
-    })
-    offsetleft = Math.min.apply(Math, mathmin);
-    if (offsetleft < (canvas_div.getBoundingClientRect().left + window.scrollX - absx)) {
+    });
+    action("UPDATE",Math.min.apply(Math, mathmin),"offsetleft");
+    if (store.getState().offsetleft < (canvas_div.getBoundingClientRect().left + window.scrollX - store.getState().absx)) {
         var blocko = blocks.map(a => a.id);
         for (var w = 0; w < blocks.length; w++) {
-            document.querySelector(".blockid[value='" + blocks.filter(a => a.id == blocko[w])[0].id + "']").parentNode.style.left = blocks.filter(a => a.id == blocko[w])[0].x - (blocks.filter(a => a.id == blocko[w])[0].width / 2) - offsetleft + canvas_div.getBoundingClientRect().left - absx + 20 + "px";
+            document.querySelector(".blockid[value='" + blocks.filter(a => a.id == blocko[w])[0].id + "']").parentNode.style.left = blocks.filter(a => a.id == blocko[w])[0].x - (blocks.filter(a => a.id == blocko[w])[0].width / 2) - store.getState().offsetleft + canvas_div.getBoundingClientRect().left - store.getState().absx + 20 + "px";
             if (blocks.filter(a => a.id == blocko[w])[0].parent != -1) {
                 var arrowblock = blocks.filter(a => a.id == blocko[w])[0];
                 var arrowx = arrowblock.x - blocks.filter(a => a.id == blocks.filter(a => a.id == blocko[w])[0].parent)[0].x;
                 if (arrowx < 0) {
-                    document.querySelector('.arrowid[value="' + blocko[w] + '"]').parentNode.style.left = (arrowblock.x - offsetleft + 20 - 5) + canvas_div.getBoundingClientRect().left - absx + "px";
+                    document.querySelector('.arrowid[value="' + blocko[w] + '"]').parentNode.style.left = (arrowblock.x - store.getState().offsetleft + 20 - 5) + canvas_div.getBoundingClientRect().left - store.getState().absx + "px";
                 } else {
-                    document.querySelector('.arrowid[value="' + blocko[w] + '"]').parentNode.style.left = blocks.filter(id => id.id == blocks.filter(a => a.id == blocko[w])[0].parent)[0].x - 20 - offsetleft + canvas_div.getBoundingClientRect().left - absx + 20 + "px";
+                    document.querySelector('.arrowid[value="' + blocko[w] + '"]').parentNode.style.left = blocks.filter(id => id.id == blocks.filter(a => a.id == blocko[w])[0].parent)[0].x - 20 - store.getState().offsetleft + canvas_div.getBoundingClientRect().left - store.getState().absx + 20 + "px";
                 }
             }
         }
@@ -573,14 +585,14 @@ export const _import = function(output) {
             var children = blocks.filter(id => id.parent == result[z])[w];
             const r_block = document.querySelector(".blockid[value='" + children.id + "']").parentNode;
             const r_array = blocks.filter(id => id.id == result[z]);
-            r_block.style.top = r_array.y + paddingy + canvas_div.getBoundingClientRect().top - absy + "px";
+            r_block.style.top = r_array.y + paddingy + canvas_div.getBoundingClientRect().top - store.getState().absy + "px";
             r_array.y = r_array.y + paddingy;
             if (children.childwidth > children.width) {
-                r_block.style.left = r_array[0].x - (totalwidth / 2) + totalremove + (children.childwidth / 2) - (children.width / 2) - (absx + window.scrollX) + canvas_div.getBoundingClientRect().left + "px";
+                r_block.style.left = r_array[0].x - (totalwidth / 2) + totalremove + (children.childwidth / 2) - (children.width / 2) - (store.getState().absx + window.scrollX) + canvas_div.getBoundingClientRect().left + "px";
                 children.x = r_array[0].x - (totalwidth / 2) + totalremove + (children.childwidth / 2);
                 totalremove += children.childwidth + paddingx;
             } else {
-                r_block.style.left = r_array[0].x - (totalwidth / 2) + totalremove - (absx + window.scrollX) + canvas_div.getBoundingClientRect().left + "px";
+                r_block.style.left = r_array[0].x - (totalwidth / 2) + totalremove - (store.getState().absx + window.scrollX) + canvas_div.getBoundingClientRect().left + "px";
                 children.x = r_array[0].x - (totalwidth / 2) + totalremove + (children.width / 2);
                 totalremove += children.width + paddingx;
             }
@@ -605,7 +617,7 @@ export const _import = function(output) {
   }
   
   function beforeDelete(drag, parent) {
-    return rearrange(drag, parent);
+    return rearrange(drag, parent) || rearrange;
   }
   
   function addEventListenerMulti(type, listener, capture, selector) {
@@ -622,7 +634,7 @@ export const _import = function(output) {
     }
   }
 
-  const ReactFlowy = (props) => {
+  export const ReactFlowy = (props) => {
     if (!Element.prototype.matches) {
         Element.prototype.matches = Element.prototype.msMatchesSelector ||
             Element.prototype.webkitMatchesSelector;
@@ -638,7 +650,7 @@ export const _import = function(output) {
         };
     }
     useEffect(() => {
-        load({ props });
+        load(props);
         document.addEventListener("mousedown", beginDrag);
         document.addEventListener("mousedown", touchblock, false);
         document.addEventListener("touchstart", beginDrag);
@@ -661,7 +673,9 @@ export const _import = function(output) {
         }
     }, [])
     return (
+      <Provider store={store}>
         <div id={props.id || "canvas"}></div>
+      </Provider>
       );    
   }
-  export default ReactFlowy;
+

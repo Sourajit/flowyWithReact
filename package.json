@@ -12,7 +12,7 @@
     "node": ">=10"
   },
   "scripts": {
-    "build": "microbundle-crl --no-compress --format modern,cjs",
+    "build": "microbundle-crl --css-modules --no-compress --format modern,cjs",
     "start": "microbundle-crl --css-modules false watch --no-compress --format modern,cjs",
     "prepare": "run-s build",
     "test": "run-s test:unit test:lint test:build",
@@ -49,5 +49,11 @@
   },
   "files": [
     "dist"
-  ]
+  ],
+  "dependencies": {
+    "immer": "^8.0.0",
+    "react-redux": "^7.2.2",
+    "redux": "^4.0.5",
+    "redux-saga": "^1.1.3"
+  }
 }
