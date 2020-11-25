@@ -15,12 +15,12 @@ npm install --save react-flowy
 ```jsx
 import React, { Component } from 'react'
 
-import MyComponent from 'react-flowy'
+import {ReactFlowy} from 'react-flowy'
 import 'react-flowy/dist/index.css'
 
 class Example extends Component {
   render() {
-    return <MyComponent />
+    return <ReactFlowy />
   }
 }
 ```
